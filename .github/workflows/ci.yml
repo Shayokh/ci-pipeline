@@ -1,0 +1,92 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - "feature/*"
+
+jobs:
+  code-checks:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install flake8 pytest safety black
+          pip install -r requirements.txt
+
+      - name: Auto-format Code with Black
+        run: black .
+
+      - name: Run Linting (Flake8)
+        run: flake8 .
+
+      - name: Run Unit Tests
+        run: pytest
+
+      - name: Dependency Check
+        run: safety check
+
+  docker-checks:
+    name: Docker Validations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install Hadolint
+        run: |
+          wget -O /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+          chmod +x /usr/local/bin/hadolint
+
+      - name: Validate Dockerfile
+        run: hadolint Dockerfile
+
+      - name: Test Docker Build
+        run: docker build -t test-image .
+
+  create-pr:
+    needs: [code-checks, docker-checks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Ensure all branches are fetched
+
+      - name: Determine Feature Branch Name
+        run: echo "FEATURE_BRANCH=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit Formatting Changes (if any)
+        run: |
+          git add .
+          git diff --cached --quiet || git commit -m "Auto-format code with Black"
+          git push origin ${{ env.FEATURE_BRANCH }}
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: development
+          branch: ${{ env.FEATURE_BRANCH }}
+          title: "Auto PR: Merging ${{ env.FEATURE_BRANCH }} into development"
+          body: "This PR was automatically created after passing CI checks."
+          labels: automated-pr
+          draft: false

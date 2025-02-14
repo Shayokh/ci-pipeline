@@ -1,0 +1,21 @@
+name: Docker Build Check
+
+on:
+  push:
+    branches:
+      - feature/docker-configuration
+  pull_request:
+    branches:
+      - feature/docker-configuration
+
+jobs:
+  build-docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          docker build -t test-image .

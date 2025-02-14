@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+  app:
+    image: mission404/fastapi-sample:latest
+    container_name: fastapi_app
+    restart: always
+    env_file: .env
+    depends_on:
+      - redis
+      - mongodb
+    networks:
+      - backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/app:/app/data
+
+  celery:
+    image: mission404/fastapi-sample:latest
+    container_name: celery_worker
+    restart: always
+    env_file: .env
+    depends_on:
+      - redis
+    networks:
+      - backend
+    command: ["celery", "-A", "worker.celery_app", "worker"]
+
+  redis:
+    image: redis:alpine
+    container_name: redis_service
+    restart: always
+    networks:
+      - backend
+    volumes:
+      - ./data/redis:/data
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_service
+    restart: always
+    env_file: .env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+    volumes:
+      - ./data/mongo:/data/db
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
